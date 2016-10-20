@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,13 +13,12 @@ import (
 func configIndexRoutes() {
 	// 触发索引全量更新, 同步操作
 	http.HandleFunc("/index/updateAll", func(w http.ResponseWriter, r *http.Request) {
-		go index.UpdateIndexAllByDefaultStep()
 		RenderDataJson(w, "ok")
 	})
 
 	// 获取索引全量更新的并行数
 	http.HandleFunc("/index/updateAll/concurrent", func(w http.ResponseWriter, r *http.Request) {
-		RenderDataJson(w, index.GetConcurrentOfUpdateIndexAll())
+		RenderDataJson(w, "ok")
 	})
 
 	// 更新一条索引数据,用于手动建立索引 endpoint metric step dstype tags
@@ -45,11 +45,7 @@ func configIndexRoutes() {
 				}
 			}
 		}
-		err := index.UpdateIndexOne(endpoint, metric, tags, dstype, int(step))
-		if err != nil {
-			RenderDataJson(w, fmt.Sprintf("%v", err))
-			return
-		}
+		log.Printf("%v %v %v %v", endpoint, metric, tags, dstype, step)
 
 		RenderDataJson(w, "ok")
 	})

@@ -1,11 +1,7 @@
 package index
 
 import (
-	"database/sql"
 	"fmt"
-	"log"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +9,6 @@ import (
 
 	cmodel "github.com/open-falcon/common/model"
 	cutils "github.com/open-falcon/common/utils"
-	"github.com/open-falcon/graph/g"
 	"github.com/open-falcon/graph/proc"
 )
 
@@ -41,6 +36,7 @@ func InitCache() {
 	go startCacheProcUpdateTask()
 }
 
+// indexedItemCache 不能随便清空
 // USED WHEN QUERY
 func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, found bool) {
 	// get it from index cache
@@ -58,78 +54,10 @@ func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, f
 	proc.GraphLoadDbCnt.Incr()
 
 	// get it from db, this should rarely happen
-	var endpointId int64 = -1
-	if endpointId, found = GetEndpointFromCache(endpoint); found {
-		if dsType, step, found = GetCounterFromCache(endpointId, counter); found {
-			//found = true
-			return
-		}
-	}
+	// TODO
 
 	// do not find it, this must be a bad request
 	found = false
-	return
-}
-
-// Return EndpointId if Found
-func GetEndpointFromCache(endpoint string) (int64, bool) {
-	// get from cache
-	endpointId, found := dbEndpointCache.Get(endpoint)
-	if found {
-		return endpointId.(int64), true
-	}
-
-	// get from db
-	var id int64 = -1
-	err := g.DB.QueryRow("SELECT id FROM endpoint WHERE endpoint = ?", endpoint).Scan(&id)
-	if err != nil && err != sql.ErrNoRows {
-		log.Println("query endpoint id fail,", err)
-		return -1, false
-	}
-
-	if err == sql.ErrNoRows || id < 0 {
-		return -1, false
-	}
-
-	// update cache
-	dbEndpointCache.Set(endpoint, id, 0)
-
-	return id, true
-}
-
-// Return DsType Step if Found
-func GetCounterFromCache(endpointId int64, counter string) (dsType string, step int, found bool) {
-	var err error
-	// get from cache
-	key := fmt.Sprintf("%d-%s", endpointId, counter)
-	dsTypeStep, found := dbEndpointCounterCache.Get(key)
-	if found {
-		arr := strings.Split(dsTypeStep.(string), "_")
-		step, err = strconv.Atoi(arr[1])
-		if err != nil {
-			found = false
-			return
-		}
-		dsType = arr[0]
-		return
-	}
-
-	// get from db
-	err = g.DB.QueryRow("SELECT type, step FROM endpoint_counter WHERE endpoint_id = ? and counter = ?",
-		endpointId, counter).Scan(&dsType, &step)
-	if err != nil && err != sql.ErrNoRows {
-		log.Println("query type and step fail", err)
-		return
-	}
-
-	if err == sql.ErrNoRows {
-		return
-	}
-
-	// update cache
-	dbEndpointCounterCache.Set(key, fmt.Sprintf("%s_%d", dsType, step), 0)
-
-	found = true
 	return
 }
 

@@ -27,6 +27,10 @@ func start_signal(pid int, cfg *g.GlobalConfig) {
 		switch s {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			log.Println("gracefull shut down")
+
+			g.CloseMQWriter()
+			log.Println("mq producer stop ok")
+
 			if cfg.Http.Enabled {
 				http.Close_chan <- 1
 				<-http.Close_done_chan
@@ -66,8 +70,8 @@ func main() {
 
 	// global config
 	g.ParseConfig(*cfg)
-	// init db
-	g.InitDB()
+	// init mq
+	g.OpenMQWriter()
 	// rrdtool before api for disable loopback connection
 	rrdtool.Start()
 	// start api

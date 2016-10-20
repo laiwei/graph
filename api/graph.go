@@ -79,7 +79,7 @@ func handleItems(items []*cmodel.GraphItem) {
 		store.GraphItems.PushFront(key, items[i], checksum, cfg)
 
 		// To Index
-		index.ReceiveItem(items[i], checksum)
+		index.BuildIndexQueues(items[i])
 
 		// To History
 		store.AddItem(checksum, items[i])
