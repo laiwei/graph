@@ -38,6 +38,7 @@ func InitCache() {
 
 // indexedItemCache 不能随便清空
 // USED WHEN QUERY
+// TODO:这里用的是PK，不是uuid，看看统一起来
 func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, found bool) {
 	// get it from index cache
 	pk := cutils.Md5(fmt.Sprintf("%s/%s", endpoint, counter))

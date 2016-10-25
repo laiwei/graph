@@ -28,18 +28,12 @@ type RRDConfig struct {
 	Storage string `json:"storage"`
 }
 
-type DBConfig struct {
-	Dsn     string `json:"dsn"`
-	MaxIdle int    `json:"maxIdle"`
-}
-
 type GlobalConfig struct {
 	Pid         string      `json:"pid"`
 	Debug       bool        `json:"debug"`
 	Http        *HttpConfig `json:"http"`
 	Rpc         *RpcConfig  `json:"rpc"`
 	RRD         *RRDConfig  `json:"rrd"`
-	DB          *DBConfig   `json:"db"`
 	CallTimeout int32       `json:"callTimeout"`
 	Migrate     struct {
 		Concurrency int               `json:"concurrency"` //number of multiple worker per node

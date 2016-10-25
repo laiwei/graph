@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/boltdb/bolt"
 	"github.com/open-falcon/graph/api"
 	"github.com/open-falcon/graph/g"
 	"github.com/open-falcon/graph/http"
@@ -28,8 +29,13 @@ func start_signal(pid int, cfg *g.GlobalConfig) {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			log.Println("gracefull shut down")
 
+			//stop mq
 			g.CloseMQWriter()
 			log.Println("mq producer stop ok")
+
+			//close boltdb
+			g.CloseDB()
+			log.Println("db closed")
 
 			if cfg.Http.Enabled {
 				http.Close_chan <- 1
@@ -70,15 +76,20 @@ func main() {
 
 	// global config
 	g.ParseConfig(*cfg)
+
 	// init mq
 	g.OpenMQWriter()
-	// rrdtool before api for disable loopback connection
+
+	// open boltdb
+	g.OpenDB()
+	g.KVDB.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucketIfNotExists([]byte("items"))
+		return nil
+	})
+
 	rrdtool.Start()
-	// start api
 	go api.Start()
-	// start indexing
 	index.Start()
-	// start http server
 	go http.Start()
 
 	start_signal(os.Getpid(), g.Config())
