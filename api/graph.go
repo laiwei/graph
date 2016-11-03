@@ -101,9 +101,9 @@ func (this *Graph) Query(param cmodel.GraphQueryParam, resp *cmodel.GraphQueryRe
 	resp.Values = []*cmodel.RRDData{}
 	resp.Endpoint = param.Endpoint
 	resp.Counter = param.Counter
-	dsType, step, exists := index.GetTypeAndStep(param.Endpoint, param.Counter) // complete dsType and step
-	if !exists {
-		return nil
+	dsType, step, err := index.GetTypeAndStep(param.Endpoint, param.Counter) // complete dsType and step
+	if err != nil {
+		return err
 	}
 	resp.DsType = dsType
 	resp.Step = step
@@ -274,9 +274,9 @@ func (this *Graph) Info(param cmodel.GraphInfoParam, resp *cmodel.GraphInfoResp)
 	// statistics
 	proc.GraphInfoCnt.Incr()
 
-	dsType, step, exists := index.GetTypeAndStep(param.Endpoint, param.Counter)
-	if !exists {
-		return nil
+	dsType, step, err := index.GetTypeAndStep(param.Endpoint, param.Counter)
+	if err != nil {
+		return err
 	}
 
 	md5 := cutils.Md5(param.Endpoint + "/" + param.Counter)
@@ -313,8 +313,8 @@ func (this *Graph) LastRaw(param cmodel.GraphLastParam, resp *cmodel.GraphLastRe
 
 // 非法值: ts=0,value无意义
 func GetLast(endpoint, counter string) *cmodel.RRDData {
-	dsType, step, exists := index.GetTypeAndStep(endpoint, counter)
-	if !exists {
+	dsType, step, err := index.GetTypeAndStep(endpoint, counter)
+	if err != nil {
 		return cmodel.NewRRDData(0, 0.0)
 	}
 

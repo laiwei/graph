@@ -13,30 +13,27 @@ import (
 )
 
 const (
-	IndexUpdateIncrTaskSleepInterval = time.Duration(1) * time.Second
+	indexUpdaterSleepInterval = time.Duration(10) * time.Second
 )
 
 // 启动索引的 异步、增量更新 任务
-func StartIndexUpdater() {
+func startIndexUpdater() {
 	for {
-		time.Sleep(IndexUpdateIncrTaskSleepInterval)
+		time.Sleep(indexUpdaterSleepInterval)
 		startTs := time.Now().Unix()
-		cnt := publishToQueue()
+		consumeItemsOnce()
 		endTs := time.Now().Unix()
+
 		// statistics
-		proc.IndexUpdateIncrCnt.SetCnt(int64(cnt))
 		proc.IndexUpdateIncr.Incr()
 		proc.IndexUpdateIncr.PutOther("lastStartTs", ntime.FormatTs(startTs))
 		proc.IndexUpdateIncr.PutOther("lastTimeConsumingInSec", endTs-startTs)
 	}
 }
 
-// 进行一次增量更新
-// TODO:测试queue writer的连接断开时的表现，测试非批量publish消息的性能
-func publishToQueue() int {
-	ret := 0
+func consumeItemsOnce() error {
 	if unIndexedItemCache == nil || unIndexedItemCache.Size() <= 0 {
-		return ret
+		return nil
 	}
 
 	keys := unIndexedItemCache.Keys()
@@ -49,31 +46,37 @@ func publishToQueue() int {
 		}
 
 		graph_item := icitem.(*IndexCacheItem).Item
-		json_data, err := json.Marshal(graph_item)
+		err := publishToQueue(graph_item)
 		if err != nil {
-			log.Printf("marshal error:%v\n", err)
+			log.Printf("publish to queue error:%s\n", err.Error())
+			uuid := graph_item.UUID()
+			unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
 			continue
 		}
 
-		uuid := graph_item.UUID()
-		log.Printf("write msg:%s to queue\n", json_data)
-		err = g.MQWriter.Publish("metric_index", json_data)
+		err = setItemToKVStore(graph_item)
 		if err != nil {
+			log.Printf("set to local kvstore error:%s\n", err.Error())
+			uuid := graph_item.UUID()
 			unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
-			log.Printf("publish msg error:%v\n", err)
-		} else {
-			indexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
-			if err = setItemToKVStore(uuid, graph_item); err != nil {
-				log.Printf("set item go kvstore fail:%s\n", err.Error())
-			}
-			ret++
 		}
 	}
 
-	return ret
+	return nil
 }
 
-func setItemToKVStore(uuid string, item *cmodel.GraphItem) error {
+// TODO:测试queue writer的连接断开时的表现，测试非批量publish消息的性能
+func publishToQueue(item *cmodel.GraphItem) error {
+	json_item, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	err = g.MQWriter.Publish("metric_index", json_item)
+	return err
+}
+
+func setItemToKVStore(item *cmodel.GraphItem) error {
+	pk := item.PrimaryKey()
 	json_item, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -81,32 +84,23 @@ func setItemToKVStore(uuid string, item *cmodel.GraphItem) error {
 
 	err = g.KVDB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("items"))
-		b.Put([]byte(uuid), json_item)
+		b.Put([]byte(pk), json_item)
 		return nil
 	})
 
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
+	return err
 }
 
-func getItemFromKVStore(uuid string) (*cmodel.GraphItem, error) {
+func getItemFromKVStore(pk string) (*cmodel.GraphItem, error) {
 	item := cmodel.GraphItem{}
 	err := g.KVDB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("items"))
-		d := b.Get([]byte(uuid))
+		d := b.Get([]byte(pk))
 		if err := json.Unmarshal(d, &item); err != nil {
 			return err
 		}
 		return nil
 	})
 
-	if err != nil {
-		return nil, err
-	} else {
-		return &item, nil
-	}
-
+	return &item, err
 }
