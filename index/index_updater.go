@@ -49,17 +49,21 @@ func consumeItemsOnce() error {
 		err := publishToQueue(graph_item)
 		if err != nil {
 			log.Printf("publish to queue error:%s\n", err.Error())
-			uuid := graph_item.UUID()
-			unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
 			continue
 		}
 
 		err = setItemToKVStore(graph_item)
+		if g.Config().Debug {
+			log.Printf("")
+			log.Printf("set_graph_item_to_kvstore, pk:%s, v:%v, error:%v\n", graph_item.PrimaryKey(), graph_item, err)
+		}
 		if err != nil {
 			log.Printf("set to local kvstore error:%s\n", err.Error())
-			uuid := graph_item.UUID()
-			unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
+			continue
 		}
+
+		uuid := graph_item.UUID()
+		indexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
 	}
 
 	return nil
@@ -71,7 +75,10 @@ func publishToQueue(item *cmodel.GraphItem) error {
 	if err != nil {
 		return err
 	}
+
+	log.Printf("write msg:%s to queue\n", json_item)
 	err = g.MQWriter.Publish("metric_index", json_item)
+
 	return err
 }
 

@@ -5,7 +5,7 @@ import (
 
 	"fmt"
 	cmodel "github.com/open-falcon/common/model"
-	cutils "github.com/open-falcon/common/utils"
+	"github.com/open-falcon/graph/g"
 	"github.com/patrickmn/go-cache"
 	"strconv"
 	"strings"
@@ -31,6 +31,7 @@ func BuildIndexQueues(item *cmodel.GraphItem) {
 
 	// 已上报过的数据
 	if indexedItemCache.ContainsKey(uuid) {
+		//TODO:add api to reset this queue for rebuild
 		return
 	} else {
 		unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, item))
@@ -38,9 +39,12 @@ func BuildIndexQueues(item *cmodel.GraphItem) {
 }
 
 func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, err error) {
-	pk := cutils.Md5(fmt.Sprintf("%s/%s", endpoint, counter))
+	pk := fmt.Sprintf("%s/%s", endpoint, counter)
 
 	v, found := counterPropsCache.Get(pk)
+	if g.Config().Debug {
+		log.Printf("get_type_and_step_from_cache, pk:%s, v:%s, found:%v\n", pk, v, found)
+	}
 	if found {
 		fields := strings.SplitN(v.(string), ":", 2)
 		dsType = fields[0]
@@ -49,6 +53,9 @@ func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, e
 	}
 
 	graph_item, err := getItemFromKVStore(pk)
+	if g.Config().Debug {
+		log.Printf("get_type_and_step_from_kvstore, pk:%s, v:%v, error:%v\n", pk, graph_item, err)
+	}
 	if err != nil {
 		return "", 0, err
 	}
