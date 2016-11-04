@@ -43,7 +43,7 @@ func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, e
 
 	v, found := counterPropsCache.Get(pk)
 	if g.Config().Debug {
-		log.Printf("get_type_and_step_from_cache, pk:%s, v:%s, found:%v\n", pk, v, found)
+		log.Printf("get_type_and_step_from_cache, pk:%s, v:%v, found:%v\n", pk, v, found)
 	}
 	if found {
 		fields := strings.SplitN(v.(string), ":", 2)
@@ -66,4 +66,13 @@ func GetTypeAndStep(endpoint string, counter string) (dsType string, step int, e
 	counterPropsCache.Set(pk, fmt.Sprintf("%s:%d", dsType, step), cache.DefaultExpiration)
 
 	return dsType, step, nil
+}
+
+func ClearIndexedCache() {
+	indexedItemCache.Reset()
+}
+
+func AddItemToUnindexedCache(item *cmodel.GraphItem) {
+	uuid := item.UUID()
+	unIndexedItemCache.Put(uuid, NewIndexCacheItem(uuid, item))
 }

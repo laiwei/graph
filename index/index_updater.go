@@ -47,6 +47,9 @@ func consumeItemsOnce() error {
 
 		graph_item := icitem.(*IndexCacheItem).Item
 		err := publishToQueue(graph_item)
+		if g.Config().Debug {
+			log.Printf("publish_to_queue, item:%v, error:%v\n", graph_item, err)
+		}
 		if err != nil {
 			log.Printf("publish to queue error:%s\n", err.Error())
 			continue
@@ -54,7 +57,6 @@ func consumeItemsOnce() error {
 
 		err = setItemToKVStore(graph_item)
 		if g.Config().Debug {
-			log.Printf("")
 			log.Printf("set_graph_item_to_kvstore, pk:%s, v:%v, error:%v\n", graph_item.PrimaryKey(), graph_item, err)
 		}
 		if err != nil {
@@ -63,22 +65,23 @@ func consumeItemsOnce() error {
 		}
 
 		uuid := graph_item.UUID()
-		indexedItemCache.Put(uuid, NewIndexCacheItem(uuid, graph_item))
+		indexedItemCache.Put(uuid, struct{}{})
+		if g.Config().Debug {
+			log.Printf("add_item_to_indexed_cache, uuid:%s, item:%v\n", uuid, graph_item)
+		}
 	}
 
 	return nil
 }
 
-// TODO:测试queue writer的连接断开时的表现，测试非批量publish消息的性能
+// TODO:批量publish消息
 func publishToQueue(item *cmodel.GraphItem) error {
 	json_item, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("write msg:%s to queue\n", json_item)
 	err = g.MQWriter.Publish("metric_index", json_item)
-
 	return err
 }
 

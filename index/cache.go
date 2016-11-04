@@ -71,6 +71,12 @@ func (this *IndexCacheBase) Remove(key string) {
 	delete(this.data, key)
 }
 
+func (this *IndexCacheBase) Reset() {
+	this.Lock()
+	defer this.Unlock()
+	this.data = make(map[string]interface{})
+}
+
 func (this *IndexCacheBase) Get(key string) interface{} {
 	this.RLock()
 	defer this.RUnlock()

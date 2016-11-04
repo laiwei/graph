@@ -8,8 +8,8 @@ import (
 	_ "net/http/pprof"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/open-falcon/graph/g"
-	"github.com/open-falcon/graph/rrdtool"
 )
 
 type Dto struct {
@@ -18,10 +18,13 @@ type Dto struct {
 }
 
 var Close_chan, Close_done_chan chan int
+var router *gin.Engine
 
 func init() {
+	router = gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+
 	configCommonRoutes()
-	configDebugRoutes()
 	configProcRoutes()
 	configIndexRoutes()
 	Close_chan = make(chan int, 1)
@@ -78,39 +81,20 @@ func Start() {
 		return
 	}
 
-	if g.Config().Migrate.Enabled {
-		http.HandleFunc("/counter/migrate",
-			func(w http.ResponseWriter, r *http.Request) {
-				RenderDataJson(w, rrdtool.GetCounter())
-			})
-	}
+	router.GET("/api/v2/counter/migrate", func(c *gin.Context) {
+		c.JSON(200, gin.H{"msg": "ok"})
+	})
 
 	addr := g.Config().Http.Listen
 	if addr == "" {
 		return
 	}
-	s := &http.Server{
-		Addr:           addr,
-		MaxHeaderBytes: 1 << 30,
-	}
-	log.Println("http listening", addr)
-
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalln(err)
-		return
-	}
-
-	l := ln.(*net.TCPListener)
-
-	go s.Serve(TcpKeepAliveListener{l})
+	go router.Run(addr)
 
 	select {
 	case <-Close_chan:
 		log.Println("http recv sigout and exit...")
-		l.Close()
 		Close_done_chan <- 1
 		return
 	}
-
 }

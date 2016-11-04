@@ -1,49 +1,64 @@
 package http
 
 import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	cmodel "github.com/open-falcon/common/model"
+	"github.com/open-falcon/graph/g"
+	"github.com/open-falcon/graph/index"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 )
 
 func configIndexRoutes() {
-	// 触发索引全量更新, 同步操作
-	http.HandleFunc("/index/updateAll", func(w http.ResponseWriter, r *http.Request) {
-		RenderDataJson(w, "ok")
+	//清空indexedItemCache，以便重新写入counter到消息队列中
+	router.POST("/api/v2/index/rebuild", func(c *gin.Context) {
+		index.ClearIndexedCache()
+		c.JSON(200, gin.H{"msg": "ok"})
 	})
 
-	// 获取索引全量更新的并行数
-	http.HandleFunc("/index/updateAll/concurrent", func(w http.ResponseWriter, r *http.Request) {
-		RenderDataJson(w, "ok")
-	})
+	router.POST("/api/v2/index/build-item", func(c *gin.Context) {
+		endpoint := c.PostForm("endpoint")
+		metric := c.PostForm("metric")
+		step := c.PostForm("step")
+		dstype := c.PostForm("dstype")
+		tag_str := c.DefaultPostForm("tags", "")
 
-	// 更新一条索引数据,用于手动建立索引 endpoint metric step dstype tags
-	http.HandleFunc("/index/update/", func(w http.ResponseWriter, r *http.Request) {
-		urlParam := r.URL.Path[len("/index/update/"):]
-		args := strings.Split(urlParam, "/")
-
-		argsLen := len(args)
-		if !(argsLen == 4 || argsLen == 5) {
-			RenderDataJson(w, "bad args")
-			return
+		if endpoint == "" || metric == "" || dstype == "" {
+			c.AbortWithError(500, fmt.Errorf("missing_params"))
 		}
-		endpoint := args[0]
-		metric := args[1]
-		step, _ := strconv.ParseInt(args[2], 10, 32)
-		dstype := args[3]
+
+		step_i, err := strconv.Atoi(step)
+		if err != nil {
+			c.AbortWithError(500, err)
+		}
+
+		tag_str = strings.Replace(tag_str, " ", "", -1)
+		tagVals := strings.Split(tag_str, ",")
 		tags := make(map[string]string)
-		if argsLen == 5 {
-			tagVals := strings.Split(args[4], ",")
-			for _, tag := range tagVals {
-				tagPairs := strings.Split(tag, "=")
-				if len(tagPairs) == 2 {
-					tags[tagPairs[0]] = tagPairs[1]
-				}
+		for _, tag := range tagVals {
+			tagPairs := strings.Split(tag, "=")
+			if len(tagPairs) != 2 {
+				c.AbortWithError(500, fmt.Errorf("wrong_tags_fmt"))
+			} else {
+				tags[tagPairs[0]] = tagPairs[1]
 			}
 		}
-		log.Printf("%v %v %v %v", endpoint, metric, tags, dstype, step)
 
-		RenderDataJson(w, "ok")
+		if g.Config().Debug {
+			log.Printf("build index manually, endpoint:%v, metric:%v, tags:%v, dstype:%v, step:%v\n", endpoint, metric, tags, dstype, step)
+		}
+
+		graph_item := &cmodel.GraphItem{
+			Endpoint: endpoint,
+			Metric:   metric,
+			DsType:   dstype,
+			Step:     step_i,
+			Tags:     tags,
+		}
+
+		index.AddItemToUnindexedCache(graph_item)
+		c.JSON(200, gin.H{"msg": "ok"})
 	})
 }
